@@ -35,20 +35,39 @@ function getSession(userId) {
   return sessions.get(userId);
 }
 
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+
 // ── /start ─────────────────────────────────────────────
 bot.command('start', async ctx => {
   await ctx.reply(
-    `🙏 *Welcome to Gurunath Ashram Projects Bot*\n\n` +
-    `You can submit items that need fixing or funding at the ashram.\n\n` +
-    `*How it works:*\n` +
-    `1. Send a photo of what needs to be fixed\n` +
-    `2. Choose a category\n` +
-    `3. Describe what needs to be done\n` +
-    `4. Estimate the cost\n\n` +
-    `Your submission will appear on *cottoncandygod\\.com* for Hamsas to fund\\.\n\n` +
-    `📸 Send a photo to get started\\.`,
+    `🪷 *Hari Om\\! Welcome to Gurunath Teachings Bot*\n\n` +
+    `This bot has two purposes:\n\n` +
+    `*📚 Learn from Gurunath's Teachings*\n` +
+    `Ask any question about Kriya Yoga, consciousness, or Gurunath's wisdom\\.\n` +
+    `→ Type /learn to start\n\n` +
+    `*📸 Submit Ashram Projects*\n` +
+    `Photo something that needs fixing at the ashram\\.\n` +
+    `→ Send a photo to get started\n\n` +
+    `🙏 *Yogiraj Siddhanath's blessings be with you\\.*`,
     { parse_mode: 'MarkdownV2' }
   );
+});
+
+// ── /learn — teachings Q&A ──────────────────────────────
+bot.command('learn', async ctx => {
+  await ctx.reply(
+    `🪷 *Ask me about Gurunath's Teachings*\n\n` +
+    `You can ask about:\n` +
+    `• Kriya Yoga and its techniques\n` +
+    `• Consciousness and awareness\n` +
+    `• Science and spirituality\n` +
+    `• Hamsa Yoga and the breath\n` +
+    `• Any teaching of Yogiraj Siddhanath\n\n` +
+    `Just type your question:`,
+    { parse_mode: 'Markdown' }
+  );
+  const s = getSession(ctx.from.id);
+  s.step = 'learning';
 });
 
 // ── Receive photo ───────────────────────────────────────
@@ -94,10 +113,44 @@ bot.callbackQuery(/^cat:(\d+)$/, async ctx => {
   );
 });
 
-// ── Text messages (description + price) ─────────────────
+// ── Text messages (description + price + learning Q&A) ──
 bot.on('message:text', async ctx => {
   const userId = ctx.from.id;
   const session = getSession(userId);
+
+  // Learning mode — answer with AI
+  if (session.step === 'learning') {
+    const question = ctx.message.text;
+    await ctx.reply(`🪷 _Thinking..._`, { parse_mode: 'Markdown' });
+    try {
+      const { default: fetch } = await import('node-fetch');
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'anthropic-version': '2023-06-01',
+          'x-api-key': ANTHROPIC_KEY,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 400,
+          system: `You are a knowledgeable guide on the teachings of Yogiraj Gurunath Siddhanath (also known as Siddhanath).
+Answer questions about his teachings on Kriya Yoga, Hamsa Yoga, consciousness, breath (Hamsa = 21,600 breaths/day), the science of spirituality, and the path to self-realization.
+Keep answers concise (3-5 paragraphs max), warm, and accessible.
+Begin responses with 🪷 and end with Hari Om.
+Draw from known themes: consciousness greater than E=MC², Hamsa breath, Kriya Yoga techniques, oneness, samadhi, Earth Peace meditation.
+Do NOT make up specific quotes — speak to the themes of his teachings.`,
+          messages: [{ role: 'user', content: question }]
+        })
+      });
+      const data = await resp.json();
+      const answer = data.content?.[0]?.text || 'I cannot answer that right now. Please try again.';
+      await ctx.reply(answer);
+    } catch (e) {
+      await ctx.reply(`❌ Could not get answer: ${e.message}`);
+    }
+    return;
+  }
 
   if (session.step === 'description') {
     session.description = ctx.message.text;
